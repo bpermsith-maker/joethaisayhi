@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>School Visit & Onboarding Leaderboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- โหลดไลบรารี PapaParse สำหรับแปลง CSV -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Sarabun', sans-serif; }
         body { background-color: #f8fafc; color: #1e293b; padding: 24px; }
@@ -103,9 +101,7 @@
                 <span>📊 สรุปผลความคืบหน้าภาพรวมรายภาค (Region Summary)</span>
                 <span style="font-size: 12px; color: #64748b; font-weight: normal;">(คลิกการ์ดเพื่อกรองตารางตามภาคได้ทันที)</span>
             </div>
-            <div class="region-grid" id="regionGrid">
-                <!-- Data populated dynamically by JS -->
-            </div>
+            <div class="region-grid" id="regionGrid"></div>
         </div>
 
         <!-- Leaderboard Table -->
@@ -140,20 +136,13 @@
                             <th style="text-align: right; padding-right: 16px;">ยอดขายบิลแรก (บาท)</th>
                         </tr>
                     </thead>
-                    <tbody id="leaderboardBody">
-                        <!-- Data populated dynamically by JS -->
-                    </tbody>
+                    <tbody id="leaderboardBody"></tbody>
                 </table>
             </div>
         </div>
-
     </div>
 
     <script>
-        // ลิงก์ CSV จาก Google Sheets
-        const RAW_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ9onzdT2i-KbCAdNuDqa-S9eDg77ga6IWrNnWQ5Hyvw6jt76BdCP0KKtHLLhYgMi53OlQYQgCD--is/pub?gid=0&single=true&output=csv';
-
-        // รายชื่อทีมหัวหน้า DE-DCR ทั้งหมด
         const DE_TARGETS = [
             { DE: "YUT", keyName: "ARYUB", REGION: "South", ASnD: "YUT", target: 53, visited: 0, opened: 0, sales: 0 },
             { DE: "RCP", keyName: "BOONROJ", REGION: "CentralWest", ASnD: "RCP", target: 51, visited: 0, opened: 0, sales: 0 },
@@ -202,62 +191,71 @@
             { DE: "RCT", keyName: "RACHEN", REGION: "CentralEast", ASnD: "RCT", target: 6, visited: 0, opened: 0, sales: 0 }
         ];
 
-        let lastUpdatedTimeStr = '';
+        // ฟังก์ชันรับข้อมูล JSONP และค้นหาตำแหน่งคอลัมน์อัตโนมัติ
+        function handleSheetData(response) {
+            console.log("GVIZ Response:", response);
+            if (!response || !response.table || !response.table.rows) {
+                document.getElementById('syncStatus').innerText = 'ไม่สามารถอ่านโครงสร้างข้อมูลได้';
+                return;
+            }
 
-        function fetchLiveSurveyData() {
-            Papa.parse(SHEET_CSV_URL, {
-                download: true,
-                header: true,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    const rows = results.data;
+            const cols = response.table.cols;
+            let distColIdx = -1;
+            let resultColIdx = -1;
+            let salesColIdx = -1;
 
-                    // รีเซ็ตค่าก่อนคำนวณใหม่
-                    DE_TARGETS.forEach(de => {
-                        de.visited = 0;
-                        de.opened = 0;
-                        de.sales = 0;
-                    });
+            // ค้นหาตำแหน่งคอลัมน์จากชื่อหัวข้อ (Header) อัตโนมัติ
+            cols.forEach((col, idx) => {
+                const label = (col.label || '').trim();
+                if (label.includes('Dist-DE-DCR') || label.includes('Region')) distColIdx = idx;
+                if (label.includes('ผลการเยี่ยม')) resultColIdx = idx;
+                if (label.includes('ยอดขาย')) salesColIdx = idx;
+            });
 
-                    rows.forEach(row => {
-                        const distDeDcr = row['Dist-DE-DCR'] || '';
-                        const resultColH = row['ผลการเยี่ยม (Visit)'] || row['ผลการเยี่ยม'] || '';
-                        const salesStr = row['ยอดขาย'] || row['ยอดขายบิลแรก'] || '0';
-                        const sales = parseFloat(salesStr.replace(/[^0-9.]/g, '')) || 0;
+            DE_TARGETS.forEach(de => { de.visited = 0; de.opened = 0; de.sales = 0; });
 
-                        if (distDeDcr) {
-                            const matchedDE = DE_TARGETS.find(item => 
-                                distDeDcr.includes(item.ASnD) && distDeDcr.includes(item.keyName)
-                            );
+            const rows = response.table.rows;
+            rows.forEach(r => {
+                const c = r.c;
+                const distDeDcr = (distColIdx !== -1 && c[distColIdx] && c[distColIdx].v) ? String(c[distColIdx].v) : '';
+                const resultColH = (resultColIdx !== -1 && c[resultColIdx] && c[resultColIdx].v) ? String(c[resultColIdx].v) : '';
+                const salesVal = (salesColIdx !== -1 && c[salesColIdx] && c[salesColIdx].v) ? parseFloat(c[salesColIdx].v) || 0 : 0;
 
-                            if (matchedDE) {
-                                matchedDE.visited += 1;
-                                if (resultColH.includes('เสนอเปิดหน้าบัญชี') || resultColH.includes('สั่งซื้อแล้ว')) {
-                                    matchedDE.opened += 1;
-                                    matchedDE.sales += sales;
-                                }
-                            }
+                if (distDeDcr) {
+                    const matchedDE = DE_TARGETS.find(item => 
+                        distDeDcr.includes(item.ASnD) && distDeDcr.includes(item.keyName)
+                    );
+
+                    if (matchedDE) {
+                        matchedDE.visited += 1;
+                        if (resultColH.includes('เสนอเปิดหน้าบัญชี') || resultColH.includes('สั่งซื้อแล้ว')) {
+                            matchedDE.opened += 1;
+                            matchedDE.sales += salesVal;
                         }
-                    });
-
-                    const now = new Date();
-                    lastUpdatedTimeStr = `อัปเดตล่าสุด: ${now.toLocaleDateString('th-TH')} ${now.toLocaleTimeString('th-TH')}`;
-                    document.getElementById('syncStatus').innerText = lastUpdatedTimeStr;
-                    renderDashboard();
-                },
-                error: function(err) {
-                    console.error("PapaParse Error:", err);
-                    document.getElementById('syncStatus').innerText = 'เชื่อมต่อไม่สำเร็จ (ตรวจสอบลิงก์ CSV)';
+                    }
                 }
             });
+
+            const now = new Date();
+            document.getElementById('syncStatus').innerText = `อัปเดตล่าสุด: ${now.toLocaleDateString('th-TH')} ${now.toLocaleTimeString('th-TH')}`;
+            renderDashboard();
+        }
+
+        function loadSheetJSONP() {
+            const oldScript = document.getElementById('jsonp-script');
+            if (oldScript) oldScript.remove();
+
+            const script = document.createElement('script');
+            script.id = 'jsonp-script';
+            script.src = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ9onzdT2i-KbCAdNuDqa-S9eDg77ga6IWrNnWQ5Hyvw6jt76BdCP0KKtHLLhYgMi53OlQYQgCD--is/gviz/tq?tqx=responseHandler:handleSheetData';
+            script.onerror = function() {
+                document.getElementById('syncStatus').innerText = 'เชื่อมต่อไม่สำเร็จ (โดนบล็อกระดับเครือข่าย)';
+            };
+            document.body.appendChild(script);
         }
 
         function renderDashboard() {
-            let grandTotalTarget = 0;
-            let grandTotalVisited = 0;
-            let grandTotalOpened = 0;
-            let grandTotalSales = 0;
-
+            let grandTotalTarget = 0, grandTotalVisited = 0, grandTotalOpened = 0, grandTotalSales = 0;
             const regionStats = {};
 
             DE_TARGETS.forEach(item => {
@@ -266,9 +264,7 @@
                 grandTotalOpened += item.opened;
                 grandTotalSales += item.sales;
 
-                if (!regionStats[item.REGION]) {
-                    regionStats[item.REGION] = { target: 0, visited: 0, opened: 0, sales: 0 };
-                }
+                if (!regionStats[item.REGION]) regionStats[item.REGION] = { target: 0, visited: 0, opened: 0, sales: 0 };
                 regionStats[item.REGION].target += item.target;
                 regionStats[item.REGION].visited += item.visited;
                 regionStats[item.REGION].opened += item.opened;
@@ -282,14 +278,13 @@
 
             const overallPct = grandTotalTarget > 0 ? Math.round((grandTotalVisited / grandTotalTarget) * 100) : 0;
             document.getElementById('visitProgressText').innerText = `คิดเป็น ${overallPct}% ของเป้าหมายทั้งหมด`;
-
             const convPct = grandTotalVisited > 0 ? ((grandTotalOpened / grandTotalVisited) * 100).toFixed(1) : 0;
             document.getElementById('convRateText').innerText = `Conversion Rate: ${convPct}%`;
 
             const regionGrid = document.getElementById('regionGrid');
             regionGrid.innerHTML = '';
-
             const grandProgressPct = grandTotalTarget > 0 ? Math.round((grandTotalVisited / grandTotalTarget) * 100) : 0;
+
             regionGrid.innerHTML += `
                 <div class="region-card total-card" onclick="selectRegion('ALL')">
                     <div class="region-header">
@@ -341,7 +336,6 @@
             tbody.innerHTML = '';
 
             const filteredData = DE_TARGETS.filter(de => selectedRegion === 'ALL' || de.REGION === selectedRegion);
-
             filteredData.sort((a, b) => b.sales - a.sales || b.opened - a.opened || b.visited - a.visited);
 
             if (filteredData.length === 0) {
@@ -351,7 +345,6 @@
 
             filteredData.forEach((de, idx) => {
                 const pct = de.target > 0 ? Math.round((de.visited / de.target) * 100) : 0;
-
                 let rankBadge = `${idx + 1}`;
                 if (idx === 0) rankBadge = '🥇 1';
                 else if (idx === 1) rankBadge = '🥈 2';
@@ -373,11 +366,8 @@
             });
         }
 
-        // ดึงข้อมูลอัตโนมัติทุกๆ 30 วินาที
-        setInterval(fetchLiveSurveyData, 30000);
-        
-        // ดึงข้อมูลครั้งแรกทันทีที่เปิดหน้าเว็บ
-        fetchLiveSurveyData();
+        setInterval(loadSheetJSONP, 30000);
+        loadSheetJSONP();
     </script>
 </body>
 </html>
