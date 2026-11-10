@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>School Visit & Onboarding Leaderboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- โหลดไลบรารี PapaParse สำหรับแปลง CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Sarabun', sans-serif; }
+        body { background-color: #f8fafc; color: #1e293b; padding: 24px; }
+        .container { max-width: 1380px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+        
+        /* Header */
+        .header { background: #ffffff; padding: 24px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+        .header h1 { font-size: 24px; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 8px; }
+        .live-badge { background: #dcfce7; color: #166534; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+        .live-dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+
+        /* Metric Cards */
+        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+        .card { background: #ffffff; padding: 20px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 5px solid #3b82f6; }
+        .card.green { border-left-color: #22c55e; }
+        .card.purple { border-left-color: #a855f7; }
+        .card.amber { border-left-color: #f59e0b; }
+        .card-title { font-size: 13px; color: #64748b; font-weight: 600; text-transform: uppercase; }
+        .card-value { font-size: 28px; font-weight: 700; color: #0f172a; margin: 8px 0 4px 0; }
+        .card-desc { font-size: 12px; color: #94a3b8; }
+
+        /* Region Summary Grid */
+        .region-section { background: #ffffff; padding: 24px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .section-title { font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        .region-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+        .region-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; cursor: pointer; transition: all 0.2s; }
+        .region-card:hover { border-color: #3b82f6; background: #f0fdf4; }
+        .region-card.total-card { background: #eff6ff; border-color: #bfdbfe; }
+        .region-card.total-card:hover { background: #dbeafe; }
+        .region-header { font-weight: 700; color: #334155; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+        .region-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+        .stat-box { background: #ffffff; padding: 8px; border-radius: 8px; border: 1px solid #f1f5f9; text-align: center; }
+        .stat-box.full-width { grid-column: span 2; background: #fffbeb; border-color: #fef3c7; }
+        .stat-label { font-size: 11px; color: #64748b; }
+        .stat-val { font-size: 14px; font-weight: 700; color: #0f172a; }
+        .progress-bar { background: #e2e8f0; height: 8px; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+        .progress-fill { background: #22c55e; height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+
+        /* Filter & Table Section */
+        .table-section { background: #ffffff; padding: 24px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .filter-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
+        .filter-select { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; background: #fff; outline: none; cursor: pointer; }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #f1f5f9; color: #475569; font-size: 13px; font-weight: 600; text-align: left; padding: 12px; }
+        td { padding: 12px; font-size: 14px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+        tr:hover { background: #f8fafc; }
+        .badge-dist { background: #e0e7ff; color: #3730a3; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+        .badge-region { background: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 6px; font-size: 11px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div>
+                <h1>🏆 School Visit & Onboarding Leaderboard</h1>
+                <p style="font-size: 13px; color: #64748b; margin-top: 2px;">ติดตามแผนการเข้าเยี่ยมโรงเรียน[cite: 2] (เป้าหมายรวม 978 โรงเรียน)</p>
+            </div>
+            <div class="live-badge">
+                <span class="live-dot"></span> <span id="syncStatus">กำลังเชื่อมต่อ Google Sheets...</span>
+            </div>
+        </div>
+
+        <!-- Metric Cards -->
+        <div class="metrics-grid">
+            <div class="card">
+                <div class="card-title">เป้าหมายเข้าเยี่ยมทั้งหมด</div>
+                <div class="card-value" id="totalTarget">978</div>
+                <div class="card-desc">จำนวนโรงเรียนตามแผนเยี่ยมวันที่ 11 พ.ย.[cite: 2]</div>
+            </div>
+            <div class="card green">
+                <div class="card-title">เข้าเยี่ยมสำเร็จแล้ว</div>
+                <div class="card-value" style="color: #16a34a;" id="totalVisited">0</div>
+                <div class="card-desc" id="visitProgressText">คิดเป็น 0% ของเป้าหมายทั้งหมด</div>
+            </div>
+            <div class="card purple">
+                <div class="card-title">เสนอเปิดหน้าบัญชีสำเร็จ</div>
+                <div class="card-value" style="color: #9333ea;" id="totalOpened">0</div>
+                <div class="card-desc" id="convRateText">Conversion Rate: 0%</div>
+            </div>
+            <div class="card amber">
+                <div class="card-title">ยอดขายเปิดบิลแรก รวม</div>
+                <div class="card-value" style="color: #d97706;" id="totalSales">฿0</div>
+                <div class="card-desc">ยอดขายสะสมบิลแรกจากการเปิดโรงเรียนใหม่</div>
+            </div>
+        </div>
+
+        <!-- Region Summary Section -->
+        <div class="region-section">
+            <div class="section-title">
+                <span>📊 สรุปผลความคืบหน้าภาพรวมรายภาค (Region Summary)</span>
+                <span style="font-size: 12px; color: #64748b; font-weight: normal;">(คลิกการ์ดเพื่อกรองตารางตามภาคได้ทันที)</span>
+            </div>
+            <div class="region-grid" id="regionGrid">
+                <!-- Data populated dynamically by JS -->
+            </div>
+        </div>
+
+        <!-- Leaderboard Table -->
+        <div class="table-section">
+            <div class="filter-bar">
+                <div class="section-title" style="margin-bottom: 0;">🥇 ตารางจัดอันดับหัวหน้าทีม (Dist-DE-DCR Leaderboard)</div>
+                <div>
+                    <label for="regionFilter" style="font-size: 13px; font-weight: 600; color: #475569; margin-right: 8px;">กรองตามภาค:</label>
+                    <select id="regionFilter" class="filter-select" onchange="filterLeaderboard()">
+                        <option value="ALL">🇹🇭 Total Thailand (ภาพรวมทั้งหมด)</option>
+                        <option value="South">South (ใต้)</option>
+                        <option value="NorthEast">NorthEast (อีสาน)</option>
+                        <option value="North">North (เหนือ)</option>
+                        <option value="CentralWest">CentralWest (กลางตะวันตก)</option>
+                        <option value="BKK">BKK (กรุงเทพฯ)</option>
+                        <option value="CentralEast">CentralEast (กลางตะวันออก)</option>
+                    </select>
+                </div>
+            </div>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 70px;">Rank</th>
+                            <th>DE / หัวหน้าทีม</th>
+                            <th>ศูนย์จัดจำหน่าย (ASnD)</th>
+                            <th>ภาค</th>
+                            <th style="text-align: center;">เป้าหมาย (รร.)</th>
+                            <th style="text-align: center;">เข้าเยี่ยมสำเร็จ</th>
+                            <th style="text-align: center;">เปิดสำเร็จ</th>
+                            <th style="text-align: center;">% ความสำเร็จ</th>
+                            <th style="text-align: right; padding-right: 16px;">ยอดขายบิลแรก (บาท)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboardBody">
+                        <!-- Data populated dynamically by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ลิงก์ CSV จาก Google Sheets
+        const RAW_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ9onzdT2i-KbCAdNuDqa-S9eDg77ga6IWrNnWQ5Hyvw6jt76BdCP0KKtHLLhYgMi53OlQYQgCD--is/pub?gid=0&single=true&output=csv';
+        // ใช้ Corsproxy.io เพื่อดึงข้อมูลข้ามโดเมนได้อย่างรวดเร็วและไม่ติดบล็อก
+        const SHEET_CSV_URL = 'https://corsproxy.io/?' + encodeURIComponent(RAW_SHEET_URL);
+
+        // รายชื่อทีมหัวหน้า DE-DCR ทั้งหมด
+        const DE_TARGETS = [
+            { DE: "YUT", keyName: "ARYUB", REGION: "South", ASnD: "YUT", target: 53, visited: 0, opened: 0, sales: 0 },
+            { DE: "RCP", keyName: "BOONROJ", REGION: "CentralWest", ASnD: "RCP", target: 51, visited: 0, opened: 0, sales: 0 },
+            { DE: "NMK", keyName: "PINPOP", REGION: "NorthEast", ASnD: "NMK", target: 39, visited: 0, opened: 0, sales: 0 },
+            { DE: "KCS", keyName: "SUPAT", REGION: "South", ASnD: "KCS", target: 38, visited: 0, opened: 0, sales: 0 },
+            { DE: "TNKS", keyName: "WORAPON", REGION: "NorthEast", ASnD: "TNKS", target: 38, visited: 0, opened: 0, sales: 0 },
+            { DE: "1O1D", keyName: "PANTHONG", REGION: "NorthEast", ASnD: "1O1D", target: 32, visited: 0, opened: 0, sales: 0 },
+            { DE: "TNKS", keyName: "NUCHJAREE", REGION: "NorthEast", ASnD: "TNKS", target: 32, visited: 0, opened: 0, sales: 0 },
+            { DE: "SRW", keyName: "USA", REGION: "NorthEast", ASnD: "SRW", target: 31, visited: 0, opened: 0, sales: 0 },
+            { DE: "WAD", keyName: "PAPINWICH", REGION: "BKK", ASnD: "WAD", target: 29, visited: 0, opened: 0, sales: 0 },
+            { DE: "CSK", keyName: "THIDAPORN", REGION: "NorthEast", ASnD: "CSK", target: 27, visited: 0, opened: 0, sales: 0 },
+            { DE: "NMK", keyName: "SURUTA", REGION: "NorthEast", ASnD: "NMK", target: 27, visited: 0, opened: 0, sales: 0 },
+            { DE: "SRW", keyName: "PORNWANAREE", REGION: "NorthEast", ASnD: "SRW", target: 27, visited: 0, opened: 0, sales: 0 },
+            { DE: "1O1D", keyName: "THANARUT", REGION: "NorthEast", ASnD: "1O1D", target: 26, visited: 0, opened: 0, sales: 0 },
+            { DE: "XXT", keyName: "SOMSAK", REGION: "NorthEast", ASnD: "XXT", target: 25, visited: 0, opened: 0, sales: 0 },
+            { DE: "SRC", keyName: "SAKUNKAEW", REGION: "CentralEast", ASnD: "SRC", target: 25, visited: 0, opened: 0, sales: 0 },
+            { DE: "KCS", keyName: "CHALERMPAN", REGION: "South", ASnD: "KCS", target: 25, visited: 0, opened: 0, sales: 0 },
+            { DE: "CPK", keyName: "RUTH", REGION: "NorthEast", ASnD: "CPK", target: 25, visited: 0, opened: 0, sales: 0 },
+            { DE: "KCS", keyName: "SIRIPORN", REGION: "South", ASnD: "KCS", target: 24, visited: 0, opened: 0, sales: 0 },
+            { DE: "CDR", keyName: "THANONGSAK", REGION: "North", ASnD: "CDR", target: 24, visited: 0, opened: 0, sales: 0 },
+            { DE: "CSH", keyName: "PITAK", REGION: "North", ASnD: "CSH", target: 22, visited: 0, opened: 0, sales: 0 },
+            { DE: "PTC", keyName: "KORRAWAT", REGION: "BKK", ASnD: "PTC", target: 21, visited: 0, opened: 0, sales: 0 },
+            { DE: "TPS", keyName: "PAVARA", REGION: "North", ASnD: "TPS", target: 20, visited: 0, opened: 0, sales: 0 },
+            { DE: "CPK", keyName: "SUPOJ", REGION: "NorthEast", ASnD: "CPK", target: 20, visited: 0, opened: 0, sales: 0 },
+            { DE: "MCM", keyName: "ALONGGON", REGION: "NorthEast", ASnD: "MCM", target: 19, visited: 0, opened: 0, sales: 0 },
+            { DE: "PDT", keyName: "DONHATHAI", REGION: "North", ASnD: "PDT", target: 18, visited: 0, opened: 0, sales: 0 },
+            { DE: "WRP", keyName: "KACHAN", REGION: "South", ASnD: "WRP", target: 18, visited: 0, opened: 0, sales: 0 },
+            { DE: "WAD", keyName: "NILAJYAAKARN", REGION: "BKK", ASnD: "WAD", target: 16, visited: 0, opened: 0, sales: 0 },
+            { DE: "TCK", keyName: "BOONTARIKA", REGION: "North", ASnD: "TCK", target: 16, visited: 0, opened: 0, sales: 0 },
+            { DE: "RCP", keyName: "PUTTARAT", REGION: "CentralWest", ASnD: "RCP", target: 16, visited: 0, opened: 0, sales: 0 },
+            { DE: "RCP", keyName: "PHAWINEE", REGION: "CentralWest", ASnD: "RCP", target: 16, visited: 0, opened: 0, sales: 0 },
+            { DE: "RCT", keyName: "PHARADEE", REGION: "CentralEast", ASnD: "RCT", target: 16, visited: 0, opened: 0, sales: 0 },
+            { DE: "CSH", keyName: "CHAIMONGKON", REGION: "North", ASnD: "CSH", target: 16, visited: 0, opened: 0, sales: 0 },
+            { DE: "CDR", keyName: "THITIPAN", REGION: "North", ASnD: "CDR", target: 15, visited: 0, opened: 0, sales: 0 },
+            { DE: "SRC", keyName: "PACHARA", REGION: "CentralEast", ASnD: "SRC", target: 15, visited: 0, opened: 0, sales: 0 },
+            { DE: "PTC", keyName: "PAWINEE", REGION: "BKK", ASnD: "PTC", target: 14, visited: 0, opened: 0, sales: 0 },
+            { DE: "YSI", keyName: "CHAVASIRIN", REGION: "CentralWest", ASnD: "YSI", target: 14, visited: 0, opened: 0, sales: 0 },
+            { DE: "SRC", keyName: "PHATTHANAN", REGION: "CentralEast", ASnD: "SRC", target: 14, visited: 0, opened: 0, sales: 0 },
+            { DE: "YSI", keyName: "KASEM", REGION: "CentralWest", ASnD: "YSI", target: 13, visited: 0, opened: 0, sales: 0 },
+            { DE: "YSI", keyName: "NATTAMON", REGION: "CentralWest", ASnD: "YSI", target: 13, visited: 0, opened: 0, sales: 0 },
+            { DE: "YSI", keyName: "EKCHAI", REGION: "CentralWest", ASnD: "YSI", target: 10, visited: 0, opened: 0, sales: 0 },
+            { DE: "TCK", keyName: "VIROONTIP", REGION: "North", ASnD: "TCK", target: 9, visited: 0, opened: 0, sales: 0 },
+            { DE: "PDT", keyName: "ATTHAPHON", REGION: "North", ASnD: "PDT", target: 9, visited: 0, opened: 0, sales: 0 },
+            { DE: "PDM", keyName: "VACANT", REGION: "CentralWest", ASnD: "PDM", target: 8, visited: 0, opened: 0, sales: 0 },
+            { DE: "PDM", keyName: "SURACHET", REGION: "CentralWest", ASnD: "PDM", target: 6, visited: 0, opened: 0, sales: 0 },
+            { DE: "RCT", keyName: "RACHEN", REGION: "CentralEast", ASnD: "RCT", target: 6, visited: 0, opened: 0, sales: 0 }
+        ];
+
+        let lastUpdatedTimeStr = '';
+
+        function fetchLiveSurveyData() {
+            Papa.parse(SHEET_CSV_URL, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    const rows = results.data;
+
+                    // รีเซ็ตค่าก่อนคำนวณใหม่
+                    DE_TARGETS.forEach(de => {
+                        de.visited = 0;
+                        de.opened = 0;
+                        de.sales = 0;
+                    });
+
+                    rows.forEach(row => {
+                        const distDeDcr = row['Dist-DE-DCR'] || '';
+                        const resultColH = row['ผลการเยี่ยม (Visit)'] || row['ผลการเยี่ยม'] || '';
+                        const salesStr = row['ยอดขาย'] || row['ยอดขายบิลแรก'] || '0';
+                        const sales = parseFloat(salesStr.replace(/[^0-9.]/g, '')) || 0;
+
+                        if (distDeDcr) {
+                            const matchedDE = DE_TARGETS.find(item => 
+                                distDeDcr.includes(item.ASnD) && distDeDcr.includes(item.keyName)
+                            );
+
+                            if (matchedDE) {
+                                matchedDE.visited += 1;
+                                if (resultColH.includes('เสนอเปิดหน้าบัญชี') || resultColH.includes('สั่งซื้อแล้ว')) {
+                                    matchedDE.opened += 1;
+                                    matchedDE.sales += sales;
+                                }
+                            }
+                        }
+                    });
+
+                    const now = new Date();
+                    lastUpdatedTimeStr = `อัปเดตล่าสุด: ${now.toLocaleDateString('th-TH')} ${now.toLocaleTimeString('th-TH')}`;
+                    document.getElementById('syncStatus').innerText = lastUpdatedTimeStr;
+                    renderDashboard();
+                },
+                error: function(err) {
+                    console.error("PapaParse Error:", err);
+                    document.getElementById('syncStatus').innerText = 'เชื่อมต่อไม่สำเร็จ (ตรวจสอบลิงก์ CSV)';
+                }
+            });
+        }
+
+        function renderDashboard() {
+            let grandTotalTarget = 0;
+            let grandTotalVisited = 0;
+            let grandTotalOpened = 0;
+            let grandTotalSales = 0;
+
+            const regionStats = {};
+
+            DE_TARGETS.forEach(item => {
+                grandTotalTarget += item.target;
+                grandTotalVisited += item.visited;
+                grandTotalOpened += item.opened;
+                grandTotalSales += item.sales;
+
+                if (!regionStats[item.REGION]) {
+                    regionStats[item.REGION] = { target: 0, visited: 0, opened: 0, sales: 0 };
+                }
+                regionStats[item.REGION].target += item.target;
+                regionStats[item.REGION].visited += item.visited;
+                regionStats[item.REGION].opened += item.opened;
+                regionStats[item.REGION].sales += item.sales;
+            });
+
+            document.getElementById('totalTarget').innerText = grandTotalTarget.toLocaleString();
+            document.getElementById('totalVisited').innerText = grandTotalVisited.toLocaleString();
+            document.getElementById('totalOpened').innerText = grandTotalOpened.toLocaleString();
+            document.getElementById('totalSales').innerText = '฿' + grandTotalSales.toLocaleString();
+
+            const overallPct = grandTotalTarget > 0 ? Math.round((grandTotalVisited / grandTotalTarget) * 100) : 0;
+            document.getElementById('visitProgressText').innerText = `คิดเป็น ${overallPct}% ของเป้าหมายทั้งหมด`;
+
+            const convPct = grandTotalVisited > 0 ? ((grandTotalOpened / grandTotalVisited) * 100).toFixed(1) : 0;
+            document.getElementById('convRateText').innerText = `Conversion Rate: ${convPct}%`;
+
+            const regionGrid = document.getElementById('regionGrid');
+            regionGrid.innerHTML = '';
+
+            const grandProgressPct = grandTotalTarget > 0 ? Math.round((grandTotalVisited / grandTotalTarget) * 100) : 0;
+            regionGrid.innerHTML += `
+                <div class="region-card total-card" onclick="selectRegion('ALL')">
+                    <div class="region-header">
+                        <span style="color: #1e40af;">🇹🇭 Total Thailand</span>
+                        <span style="font-size: 12px; color: #2563eb; font-weight: bold;">เป้าหมาย: ${grandTotalTarget} รร.</span>
+                    </div>
+                    <div class="region-stats">
+                        <div class="stat-box"><div class="stat-label">เข้าเยี่ยมรวม</div><div class="stat-val" style="color: #1e40af;">${grandTotalVisited} รร.</div></div>
+                        <div class="stat-box"><div class="stat-label">เปิดสำเร็จรวม</div><div class="stat-val" style="color: #16a34a;">${grandTotalOpened} รร.</div></div>
+                        <div class="stat-box full-width"><div class="stat-label">ยอดขายบิลแรก รวม</div><div class="stat-val" style="color: #d97706;">฿${grandTotalSales.toLocaleString()}</div></div>
+                    </div>
+                    <div class="progress-bar"><div class="progress-fill" style="width: ${grandProgressPct}%; background-color: #2563eb;"></div></div>
+                    <div style="font-size: 11px; color: #1e40af; text-align: right; margin-top: 4px; font-weight: bold;">ความคืบหน้ารวม ${grandProgressPct}%</div>
+                </div>
+            `;
+
+            Object.keys(regionStats).forEach(region => {
+                const stat = regionStats[region];
+                const progressPct = stat.target > 0 ? Math.round((stat.visited / stat.target) * 100) : 0;
+
+                regionGrid.innerHTML += `
+                    <div class="region-card" onclick="selectRegion('${region}')">
+                        <div class="region-header">
+                            <span>${region}</span>
+                            <span style="font-size: 12px; color: #3b82f6;">เป้าหมาย: ${stat.target} รร.</span>
+                        </div>
+                        <div class="region-stats">
+                            <div class="stat-box"><div class="stat-label">เข้าเยี่ยมแล้ว</div><div class="stat-val">${stat.visited} รร.</div></div>
+                            <div class="stat-box"><div class="stat-label">เปิดสำเร็จ</div><div class="stat-val" style="color: #16a34a;">${stat.opened} รร.</div></div>
+                            <div class="stat-box full-width"><div class="stat-label">ยอดขายบิลแรก</div><div class="stat-val" style="color: #d97706;">฿${stat.sales.toLocaleString()}</div></div>
+                        </div>
+                        <div class="progress-bar"><div class="progress-fill" style="width: ${progressPct}%;"></div></div>
+                        <div style="font-size: 11px; color: #64748b; text-align: right; margin-top: 4px;">ความคืบหน้า ${progressPct}%</div>
+                    </div>
+                `;
+            });
+
+            filterLeaderboard();
+        }
+
+        function selectRegion(regionName) {
+            document.getElementById('regionFilter').value = regionName;
+            filterLeaderboard();
+        }
+
+        function filterLeaderboard() {
+            const selectedRegion = document.getElementById('regionFilter').value;
+            const tbody = document.getElementById('leaderboardBody');
+            tbody.innerHTML = '';
+
+            const filteredData = DE_TARGETS.filter(de => selectedRegion === 'ALL' || de.REGION === selectedRegion);
+
+            filteredData.sort((a, b) => b.sales - a.sales || b.opened - a.opened || b.visited - a.visited);
+
+            if (filteredData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #94a3b8; padding: 24px;">ไม่พบข้อมูลหัวหน้าทีมในภาคนี้</td></tr>`;
+                return;
+            }
+
+            filteredData.forEach((de, idx) => {
+                const pct = de.target > 0 ? Math.round((de.visited / de.target) * 100) : 0;
+
+                let rankBadge = `${idx + 1}`;
+                if (idx === 0) rankBadge = '🥇 1';
+                else if (idx === 1) rankBadge = '🥈 2';
+                else if (idx === 2) rankBadge = '🥉 3';
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td style="font-weight: 700; text-align: center;">${rankBadge}</td>
+                        <td style="font-weight: 600;">${de.ASnD}-${de.keyName}</td>
+                        <td><span class="badge-dist">${de.ASnD}</span></td>
+                        <td><span class="badge-region">${de.REGION}</span></td>
+                        <td style="text-align: center; font-weight: 700;">${de.target}</td>
+                        <td style="text-align: center;">${de.visited}</td>
+                        <td style="text-align: center; font-weight: 700; color: #16a34a;">${de.opened}</td>
+                        <td style="text-align: center; font-weight: 700; color: #2563eb;">${pct}%</td>
+                        <td style="text-align: right; font-weight: 700; color: #d97706; padding-right: 16px;">฿${de.sales.toLocaleString()}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        // ดึงข้อมูลอัตโนมัติทุกๆ 30 วินาที
+        setInterval(fetchLiveSurveyData, 30000);
+        
+        // ดึงข้อมูลครั้งแรกทันทีที่เปิดหน้าเว็บ
+        fetchLiveSurveyData();
+    </script>
+</body>
+</html>
